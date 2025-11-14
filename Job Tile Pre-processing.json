@@ -1,0 +1,353 @@
+{
+  "name": "AI Job Title Matching",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -496,
+        80
+      ],
+      "id": "6d674dc2-e818-4138-9dba-8ce10dd65ba8",
+      "name": "When clicking 'Execute workflow'"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "unprocessed_job_title",
+        "returnAll": true,
+        "matchType": "allFilters"
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        -272,
+        80
+      ],
+      "id": "b9012b8e-cca4-4eae-8594-ae8c0ff2439e",
+      "name": "Get Unprocessed Jobs",
+      "credentials": {
+        "supabaseApi": {
+          "id": "RrKJOXEwfrfTB5a8",
+          "name": "Supabase account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        176,
+        80
+      ],
+      "id": "7d9165c6-6da4-4d13-ad1a-d2160dffdbe4",
+      "name": "Loop Over Jobs"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "chatInput",
+              "name": "chatInput",
+              "value": "=Classify these skills into soft_skill and hard_skill categories:\n\n{{ $json.job_skill_set }}\n\nReturn your response as JSON only.",
+              "type": "string"
+            },
+            {
+              "id": "job_id",
+              "name": "job_id",
+              "value": "={{ $json.id }}",
+              "type": "number"
+            },
+            {
+              "id": "job_title",
+              "name": "job_title",
+              "value": "={{ $json.job_title }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        400,
+        -48
+      ],
+      "id": "dd7184ba-9853-4156-b880-2c10641c69dd",
+      "name": "Format Data for AI"
+    },
+    {
+      "parameters": {
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "You are a data classification AI.\n\nAnalyze the list of skills and categorize each into either \"soft_skill\" or \"hard_skill\".\n\nRules:\n- Soft skills: interpersonal, behavioral (communication, leadership, teamwork, problem-solving, adaptability)\n- Hard skills: technical, measurable (Python, SQL, Excel, JavaScript, project management tools)\n\nIMPORTANT: Return ONLY valid JSON. No markdown, no explanations, no code blocks.\n\nOutput format:\n{\n  \"commands\": [\n    {\n      \"table_name\": \"soft_skill\",\n      \"data\": [\n        {\"skill_name\": \"communication\"},\n        {\"skill_name\": \"leadership\"}\n      ]\n    },\n    {\n      \"table_name\": \"hard_skill\",\n      \"data\": [\n        {\"skill_name\": \"Python\"},\n        {\"skill_name\": \"SQL\"}\n      ]\n    }\n  ]\n}"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        624,
+        -48
+      ],
+      "id": "2793bcc5-93c7-4693-93c1-222259d73647",
+      "name": "AI Agent",
+      "retryOnFail": true,
+      "waitBetweenTries": 5
+    },
+    {
+      "parameters": {
+        "tableId": "job_skill",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "hard_skills_words",
+              "fieldValue": "={{ $json.hard_skills_words }}"
+            },
+            {
+              "fieldId": "soft_skills_words",
+              "fieldValue": "={{ $json.soft_skills_words }}"
+            },
+            {
+              "fieldId": "job_title",
+              "fieldValue": "={{ $json.job_title }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1424,
+        80
+      ],
+      "id": "2a4231f3-00d0-4150-8b8d-f652f4647a98",
+      "name": "Update Job Skills",
+      "credentials": {
+        "supabaseApi": {
+          "id": "RrKJOXEwfrfTB5a8",
+          "name": "Supabase account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "f73cfc73-981a-48b5-89db-00acf05cdc97",
+              "leftValue": "={{ $json.job_title }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "966767eb-bb82-4afa-b89e-21a0a398af75",
+              "leftValue": "={{ $json.job_skill_set }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.2,
+      "position": [
+        -48,
+        80
+      ],
+      "id": "986dbf06-6519-4aa6-aad5-92ff7ea94ee5",
+      "name": "Filter"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Lấy tất cả items từ input\nconst items = $input.all();\n\n// Danh sách stop words / từ nối phổ biến\nconst stopWords = new Set(['and','or','the','of','in','for','to','with','on','at','by','an','a']);\n\n// Hàm chuẩn hóa và tách từ, lọc mạnh\nfunction normalizeAndSplit(skillsArray) {\n  const allWords = new Set();\n  \n  if (!Array.isArray(skillsArray)) return [];\n\n  skillsArray.forEach(skill => {\n    if (typeof skill !== 'string' || skill.trim().length === 0) return;\n\n    // Chuyển về lowercase, loại bỏ ký tự đặc biệt, tách từ\n    const words = skill.toLowerCase()\n      .replace(/[^a-z\\s]/g, ' ')  // chỉ giữ chữ và space, loại bỏ số và ký tự đặc biệt\n      .split(/\\s+/)               // tách theo space (1 hoặc nhiều)\n      .map(w => w.trim())\n      .filter(word => word.length >= 2 && !stopWords.has(word)); // bỏ từ <2 ký tự và stop words\n\n    words.forEach(word => allWords.add(word));\n  });\n  \n  return Array.from(allWords).sort();\n}\n\n// Xử lý từng item\nconst output = items.map(item => {\n  const jobTitle = item.json.job_title || '';\n  const softSkills = item.json.soft_skills || [];\n  const hardSkills = item.json.hard_skills || [];\n  \n  return {\n    json: {\n      job_title: jobTitle,\n      soft_skills_words: normalizeAndSplit(softSkills),\n      hard_skills_words: normalizeAndSplit(hardSkills),\n      original_soft_skills: softSkills,\n      original_hard_skills: hardSkills\n    }\n  };\n});\n\nreturn output;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        -48
+      ],
+      "id": "e0c42d98-0739-4b8c-a141-46d86e6354b6",
+      "name": "Code - Get Token"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse AI output and format for Supabase update\nconst input = $input.first().json;\nconst formatData = $('Format Data for AI').first().json;\n\nconsole.log('=== AI Agent Raw Output ===');\nconsole.log(JSON.stringify(input, null, 2));\n\nlet commands;\n\n// Handle different output formats\nif (input.commands) {\n  commands = input.commands;\n} else if (input.output) {\n  try {\n    const rawOutput = typeof input.output === 'string' \n      ? input.output.replace(/```json\\n?/g, '').replace(/```\\n?/g, '').trim()\n      : '';\n    if (typeof input.output === 'string') {\n      console.log('=== Raw output string before JSON.parse ===');\n      console.log(rawOutput);\n      const outputValue = JSON.parse(rawOutput);\n      commands = outputValue.commands;\n    } else {\n      commands = input.output.commands;\n    }\n  } catch (error) {\n    throw new Error(`Invalid JSON in input.output: ${error.message}\\nRaw string: ${input.output}`);\n  }\n} else if (input.text) {\n  try {\n    const rawText = input.text.replace(/```json\\n?/g, '').replace(/```\\n?/g, '').trim();\n    console.log('=== Raw text string before JSON.parse ===');\n    console.log(rawText);\n    const parsed = JSON.parse(rawText);\n    commands = parsed.commands;\n  } catch (error) {\n    throw new Error(`Invalid JSON in input.text: ${error.message}\\nRaw string: ${input.text}`);\n  }\n} else {\n  throw new Error('Cannot find commands in AI output');\n}\n\n// Separate soft and hard skills\nconst softSkills = [];\nconst hardSkills = [];\n\ncommands.forEach(command => {\n  const skills = command.data.map(s => s.skill_name);\n  \n  if (command.table_name === 'soft_skill') {\n    softSkills.push(...skills);\n  } else if (command.table_name === 'hard_skill') {\n    hardSkills.push(...skills);\n  }\n});\n\nconsole.log('=== Classified Skills ===');\nconsole.log('Soft skills:', softSkills);\nconsole.log('Hard skills:', hardSkills);\n\n// Return data for Supabase update\nreturn [{\n  json: {\n\n    job_title: formatData.job_title,\n    soft_skills: softSkills,\n    hard_skills: hardSkills\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        976,
+        -48
+      ],
+      "id": "f032af38-d1cf-4422-a9d4-803fb90fab07",
+      "name": "Code - Process AI Output"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatCohere",
+      "typeVersion": 1,
+      "position": [
+        560,
+        128
+      ],
+      "id": "8efc69f5-d5fb-45fa-b8f9-12e340fee16a",
+      "name": "Cohere Chat Model",
+      "credentials": {
+        "cohereApi": {
+          "id": "jbawqMsipFkjsvac",
+          "name": "CohereApi account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking 'Execute workflow'": {
+      "main": [
+        [
+          {
+            "node": "Get Unprocessed Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Unprocessed Jobs": {
+      "main": [
+        [
+          {
+            "node": "Filter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Jobs": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Format Data for AI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Data for AI": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Code - Process AI Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Job Skills": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Get Token": {
+      "main": [
+        [
+          {
+            "node": "Update Job Skills",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Process AI Output": {
+      "main": [
+        [
+          {
+            "node": "Code - Get Token",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cohere Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "46d1dd15-7321-447a-a55d-5f75786f7e05",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "9f7b4f608f7d595d8ae5ac5dd894b34f59b5724e089596e7f5a872c8ad7d6685"
+  },
+  "id": "5LLaHRjEGj6kMhzC",
+  "tags": []
+}
